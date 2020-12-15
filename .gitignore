@@ -1,0 +1,8 @@
+.ccls-cache
+.vscode
+compile_commands.json
+*~
+/build*
+/debug*
+/release*
+

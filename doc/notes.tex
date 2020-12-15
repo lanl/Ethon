@@ -1,0 +1,489 @@
+\documentclass{article}
+
+\usepackage{amsmath}
+\usepackage{bm}
+\usepackage{natbib}
+\usepackage{hyperref}
+\usepackage{cleveref}
+
+% Turn off ChkTeX warning about \( \) instead of $ $
+% chktex-file 46
+
+\begin{document}
+
+\author{Jonas Lippuner}
+\title{Ethon hydrodynamics notes}
+
+\maketitle
+
+Ethon is a free and open source software framework to test and develop hydrodynamics methods
+with block-based  adaptive mesh refinement on various parallel computing architectures. It
+is available at \url{https://github.com/lanl/Ethon} and described in detail in \cite{lippuner:21}.
+These notes are distributed together with the Ethon source code and they describe
+the hydrodynamics physics currently implemented in Ethon.
+
+Throughout these notes, we will use index notation for vectors and derivatives. The vector $\vec x$
+will be denoted as $x^i$, where $i$ ranges from 1 to 3. Furthermore, we denote time and spacial
+derivatives as follows.
+\begin{align}
+  \frac{\partial}{\partial t} = \partial_t
+  \qquad \text{and} \qquad
+  \frac{\partial}{\partial x_i} = \partial_i.
+\end{align}
+Note that we are in flat space-time, hence covariant and contravariant indices are the same.
+Repeated indices are summed over. For example, the gradient of a scalar and divergence of a vector
+field are written as
+\begin{align}
+  \label{eq:examples}
+  \nabla f = \partial_i f
+  \qquad \text{and} \qquad
+  \nabla \cdot \vec u = \partial_i u^i.
+\end{align}
+
+\section{Conserved and primitive variables}
+
+We define the following \textbf{primitive} variables:
+\begin{itemize}
+  \item Fluid density $\rho$
+  \item Fluid velocity $u^i$
+  \item Fluid internal specific energy $e$
+  \item Fluid stress tensor $P^{ij}$
+\end{itemize}
+For now we only consider isotropic stresses and so we write $P^{ij} = p\delta^{ij}$, where $p$ is
+the usual fluid pressure and $\delta^{ij}$ is the Kronecker delta.
+
+The \textbf{conserved} variables are the ones that are actually evolved and they are:
+\begin{itemize}
+  \item Mass density $\rho$
+  \item Momentum density $\mu^i = \rho u^i$
+  \item Total energy density $\epsilon = \rho e + \frac{1}{2}\rho u_i u^i$
+\end{itemize}
+Note that the total energy density is the sum of the internal energy density and kinetic energy
+density.
+
+\section{Compressible Euler equations}
+
+We write the conservation equations for the conserved variables as follows.
+\begin{align}
+  \label{eq:mass_cons}
+  \partial_t \rho + \partial_j(\rho u^j)  & = 0 \\
+  \label{eq:mom_cons}
+  \partial_t \mu^i + \partial_j(\rho u^i u^j + P^{ij}) & = \rho g^i \\
+  \label{eq:ener_cons}
+  \partial_t \epsilon + \partial_j(\epsilon u^j + u_i P^{ij}) & = \rho u_i g^i,
+\end{align}
+where $g^i$ is the external acceleration due to gravity. Note that we can write the above also in
+terms of the time derivatives of the primitive variables.
+The mass conservation equation \labelcref{eq:mass_cons} remains the same. The momentum conservation
+equation \labelcref{eq:mom_cons} becomes
+\begin{align}
+  \label{eq:dtu}
+  & \partial_t(\rho u^i)
+  + \partial_j(\rho u^i u^j + P^{ij})
+  = \rho g^i
+  \nonumber \\
+  \Leftrightarrow\ \
+  & u^i\left(\partial_t + \partial_j(\rho u^j)\right)
+  + \rho \partial_t u^i
+  + \rho u^j \partial_j u^i
+  + \partial^j p \delta^{ij}
+  = \rho g^i
+  \nonumber \\
+  \Leftrightarrow\ \
+  & \partial_t u^i
+  + u^j \partial_j u^i
+  + \frac{\partial^i p}{\rho}
+  = g^i,
+\end{align}
+where we used \cref{eq:mass_cons}, $\mu^i = \rho u^i$, and $P^{ij} = p\delta^{ij}$. Finally, for the
+energy conservation equation \labelcref{eq:ener_cons} we find
+\begin{align}
+  & \partial_t\left(\rho e + \frac{1}{2}\rho u_i u^i\right)
+  + \partial_j\left(\rho e u^j + \frac{1}{2}\rho u_i u^i u^j + u_i P^{ij}\right)
+  = \rho u_i g^i
+  \nonumber \\
+  \Leftrightarrow\ \
+  & e\partial_t\rho + \rho \partial_t e + \frac{1}{2}u_i u^i\partial_t \rho + \rho u_i\partial_t u^i
+  \nonumber \\
+  & {} + e\partial_j(\rho u^j) + \rho u^j \partial_j e + \frac{1}{2}u_i u^i \partial_j(\rho u^j)
+    + \rho u^j u_i\partial_j u^i
+  \nonumber \\
+  & {} + u_i \partial^i p + p\partial^i u_i
+  = \rho u_i g^i
+  \nonumber \\
+  \Leftrightarrow\ \
+  & e\left(\partial_t \rho + \partial_j(\rho u^j)\right)
+  \nonumber \\
+  & {} + \frac{1}{2}u_i u^i\left(\partial_t \rho + \partial_j(\rho u^j)\right)
+  \nonumber \\
+  & {} + \rho u_i \left(\partial_t u^i + u^j\partial_j u^i + \frac{\partial^i p}{\rho} - g^i\right)
+  \nonumber \\
+  & {} + \rho \partial_t e + \rho u^j \partial_j e + p \partial^i u_i = 0
+  \nonumber \\
+  \Leftrightarrow\ \
+  & \partial_t e + u^i\partial_i e + \frac{p}{\rho}\partial^i u_i = 0,
+\end{align}
+where we used \cref{eq:mass_cons,eq:dtu}, $\epsilon = \rho e + \frac{1}{2}\rho u_i u^i$, and
+$P^{ij} = p\delta^{ij}$.
+
+If shocks are present, non-conservative methods do not converge to the correct solution, so one must
+use conservative methods in those cases (which do converge to the correct solution, if they converge
+at all), see \citet[][\S 5.3]{toro}.
+
+\newcommand{\vc}[1]{\mathrm{\bf #1}}
+
+For notational simplicity, we shall write the conservative form of the compressible Euler equations
+\labelcref{eq:mass_cons,eq:mom_cons,eq:ener_cons} as follows
+\begin{align}
+  \label{eq:euler_vec}
+  \partial_t \vc{U} + \partial_j \vc{F}^j(\vc U) = \vc{S}(\vc U),
+\end{align}
+where the state vector $\vc U$, the flux tensor $\vc F^j(\vc U)$, and the source term
+$\vc S(\vc U)$ are given by
+\begin{align}
+  \label{eq:system_vecs}
+  \vc U =
+    \begin{bmatrix}
+      \rho  \\
+      \mu^1 \\
+      \mu^2 \\
+      \mu^3 \\
+      \epsilon
+    \end{bmatrix}, \qquad
+  \vc F^j(\vc U) =
+    \begin{bmatrix}
+      \rho u^j \\
+      \rho u^1 u^j + P^{1j} \\
+      \rho u^2 u^j + P^{2j} \\
+      \rho u^3 u^j + P^{3j} \\
+      \epsilon u^j + u_i P^{ij}
+    \end{bmatrix}, \qquad
+  \vc S(\vc U) =
+    \begin{bmatrix}
+      0 \\
+      \rho g^1 \\
+      \rho g^2 \\
+      \rho g^3 \\
+      \rho u_i g^i
+    \end{bmatrix}.
+\end{align}
+Note that to evaluate $\vc F^j(\vc U)$ we need an additional Equation of State (EOS) that allows us
+to recover the primitive variables from the conservative ones, which are contained in $\vc U$. Note
+that all of the above quantities are functions of time and space.
+
+
+\section{Finite-volume scheme}
+
+To discretize the non-linear, partial-differential Euler equations \labelcref{eq:mass_cons,%
+eq:mom_cons,eq:ener_cons} we introduce a Cartesian mesh. For simplicity, we initially consider a
+uniform mesh with cells of size $\Delta x^i$, where the sizes in the three dimensions can vary, in
+principle (in practice they are usually the same, though). Furthermore, we consider a cell-centered
+method where we have grid points at the centers of the cells and the cell-averaged quantities are
+stored at those grid points. Additionally, we initially restrict ourselves to the case without
+source terms, i.e.\ $\vc S = \vc 0$ and so we have the system
+\begin{align}
+  \label{eq:sys}
+  \partial_t \vc U + \partial_j \vc F^j(\vc U) = \vc 0.
+\end{align}
+
+\newcommand{\dv}{\,\mathrm{d}V}
+\newcommand{\ds}{\,\mathrm{d}S}
+\newcommand{\dt}{\,\mathrm{d}t}
+
+Now consider a cell with index $\alpha$ and volume
+\begin{align}
+  V_\alpha = \Delta x^1 \Delta x^2 \Delta x^3.
+\end{align}
+We define the cell average of the state vector in cell $\alpha$ as
+\begin{align}
+  \label{eq:cell-average}
+  \bar{\vc U}_\alpha(t) = \frac{1}{V_\alpha} \int_{V_\alpha} \vc U(x^i,t) \dv.
+\end{align}
+Since $\partial_t \vc U = -\partial_j\vc F^j(\vc U)$, we have
+\begin{align}
+  \vc U(x^i,t_2) = \vc U(x^i, t_1) - \int_{t_1}^{t_2} \partial_j \vc F^j(\vc U(x^i,t)) \dt,
+\end{align}
+and so
+\begin{align}
+  \label{eq:avg-update}
+  \bar{\vc U}_\alpha(t_2) &= \frac{1}{V_\alpha}\int_{V_\alpha} \left( \vc U(x^i,t_1)
+    - \int_{t_1}^{t^2} \partial_j \vc F^j(\vc U(x^i, t))\dt \right)\dv
+  \nonumber \\
+  &= \bar{\vc U}_\alpha(t_1) - \frac{1}{V_\alpha}\int_{t_1}^{t_2}\int_{\partial V_\alpha}
+    n_j \vc F^j(\vc U(x^i, t))\ds\dt,
+\end{align}
+where we assumed that the flux $\vc F$ is well behaved so that we can change the order of
+integration, and
+we used the divergence theorem to replace the volume integral of the divergence of $\vc F$ with the
+surface integral over the cell $\alpha$, where $n_j$ is the normal vector of the cell surface. Note
+that \cref{eq:avg-update} is exact since we have made no approximations yet.
+
+The surface integral in \cref{eq:avg-update} has six components, namely the integral of the flux
+across the six faces of the cell. For cell $\alpha$ we define the following quantities
+\begin{align}
+  \label{eq:cell-def}
+  x_\alpha^i &= \text{cell center location}, \nonumber \\
+  x_{\alpha,L}^i &= \text{coordinates of the lower cell faces, and} \nonumber \\
+  x_{\alpha,U}^i &= \text{coordinates of the upper cell faces.}
+\end{align}
+Note that
+\begin{align}
+  x_{\alpha,U}^i - x_{\alpha,L}^i = \Delta x^i \qquad \text{and} \qquad
+  x_\alpha^i = \frac{x_{\alpha,L}^i + x_{\alpha,U}^i}{2}.
+\end{align}
+We can now write \cref{eq:avg-update} as
+\begin{align}
+  \label{eq:finite-volume}
+  \bar{\vc U}_\alpha(t_2) = \bar{\vc U}_\alpha(t_1) + \frac{\Delta t}{\Delta x^i}
+          \left(\bar{\vc F}^i_{\alpha,L} - \bar{\vc F}^i_{\alpha,U}\right),
+\end{align}
+where $\Delta t$ = $t_2 - t_1$, and $\bar{\vc F}^i_{\alpha,L}$ and
+$\bar{\vc F}^i_{\alpha,U}$ are the average fluxes through the lower and upper faces in the
+$i$-direction. Their exact form is
+\begin{align}
+  \label{eq:fluxes}
+  \bar{\vc F}^i_{\alpha,L} = \frac{\Delta x^i}{\Delta t V_\alpha}\int_{t_1}^{t_2}
+      \int_{V_\alpha} \vc F^i(\vc U(x^1, x^2, x^3, t)) \delta(x^i - x^i_L) \dv \dt
+      \quad \text{(no sum over $i$)},
+\end{align}
+where the Dirac-Delta function reduces the integral over the cell volume to an integral over the
+lower cell face in direction $i$ with coordinate $x^i_L$. The expression for
+$\bar{\vc F}^i_{\alpha,U}$ is analogous, since we have already taken care of the sign of the
+normal vector of the lower and upper faces in \cref{eq:finite-volume}.
+
+Obviously, we cannot evaluate \cref{eq:fluxes} directly, because that would require knowledge of the
+solution $\vc U$ at all times and all points in space. One of the core ingredients of a finite
+volume method is thus to prescribe some numeric approximations for $\bar{\vc F}^i_{\alpha,L}$
+and $\bar{\vc F}^i_{\alpha,U}$ that can be readily evaluated.
+
+\subsection{Godunov scheme}
+
+The Godunov scheme is one of the simplest finite volume schemes and it is first-order
+accurate. We compute the fluxes by solving the Riemann Problem between the two cells, i.e.
+\begin{align}
+\bar{\vc{F}}^j_{\alpha,L} = \text{RP}(\bar{\vc U}_{\alpha-1}, \bar{\vc U}_\alpha), \\
+\bar{\vc{F}}^j_{\alpha,U} = \text{RP}(\bar{\vc U}_\alpha, \bar{\vc U}_{\alpha+1}),
+\end{align}
+where $\bar{\vc U}_{\alpha-1}$ and $\bar{\vc U}_{\alpha+1}$ are the average states of the cells
+adjacent to cell $\alpha$ in the lower and upper direction in dimension $j$, respectively,
+and we use RP to denote the solution to the Riemann Problem. We can use use these fluxes in
+\cref{eq:finite-volume} to update the state in cell $\alpha$.
+
+
+\subsection{MUSCL-Hancock scheme}
+
+The MUSCL-Hancock scheme is a popular finite volume scheme that is second-order accurate in time and
+space. MUSCL stands for Monotone Upstream-centred Scheme for Conservation Laws. For example, FLASH
+uses MUSCL-Hancock for its dimensionally unsplit hydro solver. See
+\cite[\S13.4, \S14.4, \S16.5]{toro} for more details.
+
+The central idea in the MUSCL-Hancock scheme is to replace the constant cell averages by a linearly
+varying quantity within the cell. Considering only one dimension for a moment, we define the
+conserved quantity $\vc U_\alpha(x)$ in the cell $\alpha$ as
+\begin{align}
+  \label{eq:ux}
+  \vc U_\alpha(x) = \bar{\vc U}_\alpha + \frac{x - x_\alpha}{\Delta x} \vc\Delta_\alpha
+  \qquad\text{for } x\in [x_{\alpha,L}, x_{\alpha,U}],
+\end{align}
+where $\vc\Delta_\alpha$ is a suitably chosen slope vector (of the five conserved quantities)
+of the solution inside the cell (see \cref{sec:slope} for details on how to construct the slope
+vector).
+The above is at a fixed time.
+We now evaluate the above at the lower and upper boundaries
+to get the extrapolated boundary values of $\vc U$:
+\begin{align}
+  \label{eq:extrapolated-boundary-values-1d}
+  \vc U^L_\alpha = \vc U_\alpha(x_{\alpha,L}) =
+    \bar{\vc U}_\alpha - \frac{\vc\Delta_\alpha}{2}
+  \quad \text{and} \quad
+  \vc U^U_\alpha = \vc U_\alpha(x_{\alpha,U}) =
+    \bar{\vc U}_\alpha + \frac{\vc\Delta_\alpha}{2}.
+\end{align}
+We now evolve the boundary extrapolated conserved quantities for a half timestep $\Delta t/2$
+according to \cref{eq:finite-volume} by evaluating $\vc F$ for the boundary extrapolated values
+$\vc U^L_\alpha$ and $\vc U^U_\alpha$ and using these as the approximate fluxes. Hence
+we get
+\begin{align}
+  \label{eq:half-time-step-1d}
+  \hat{\vc U}^L_\alpha &= \vc U^L_\alpha + \frac{\Delta t}{2\Delta x}
+      \left[\vc F(\vc U^L_\alpha) - \vc F(\vc U^U_\alpha)\right], \nonumber \\
+  \hat{\vc U}^U_\alpha &= \vc U^U_\alpha + \frac{\Delta t}{2\Delta x}
+      \left[\vc F(\vc U^L_\alpha) - \vc F(\vc U^U_\alpha)\right],
+\end{align}
+where all the right-hand side terms are evaluated at the current time $t_1$. Finally, to obtain the
+actual approximate fluxes at the cell boundaries, we solve the one-dimensional local Riemann problem
+at the cell boundaries using the evolved boundary extrapolated quantities. A thorough discussion of
+the Riemann Problem is beyond the scope of these notes. Simply put, the solution to Riemann Problem
+roughly provides the flux across a discontinuity namely a cell face. For more details, see \cite{toro}.
+The Riemann Problem
+requires left and right initial states $\vc U_L$ and $\vc U_R$ and produces a similarity solution
+$\vc U(x/t)$, which we will denote by
+\begin{align}
+  \label{eq:RP-notation}
+  \vc U(x/t) \equiv \text{RP}(\vc U_L, \vc U_R).
+\end{align}
+At the lower cell boundary of cell $\alpha$, the left initial state for the Riemann problem is
+$\hat{\vc U}_{\alpha-1}^U$ and the right initial state is $\hat{\vc U}_\alpha^L$, where $\alpha -1$
+denotes the cell to the left of cell $\alpha$ in the $x$-direction. The initial states for the
+Riemann Problem at the upper cell boundary of cell $\alpha$ are analogous. Hence we have
+\begin{align}
+  \label{eq:RPs-1d}
+  \vc U_\alpha^L(x/t) &= \text{RP}(\hat{\vc U}_{\alpha-1}^U, \hat{\vc U}_\alpha^L), \nonumber \\
+  \vc U_\alpha^U(x/t) &= \text{RP}(\hat{\vc U}_\alpha^U, \hat{\vc U}_{\alpha+1}^L),
+\end{align}
+where $\alpha+1$ is the cell to the right of cell $\alpha$ in the $x$-direction. We now use the
+Riemann similarity solutions evaluated at $x/t = 0$ to get the final approximate fluxes for
+\cref{eq:finite-volume}, thus we have
+\begin{align}
+  \label{eq:fluxes-1d}
+  \bar{\vc F}_{\alpha,L} = \vc F(\vc U_\alpha^L(0)) \qquad \text{and} \qquad
+  \bar{\vc F}_{\alpha,U} = \vc F(\vc U_\alpha^U(0)).
+\end{align}
+Note that in principle, we could solve the Generalized Riemann Problem where the left and right
+states are not constant. We could use a linear form similar to \cref{eq:ux} to describe the left and
+right states for the Riemann Problems at the boundaries. However, the Generalized Riemann Problem is
+exceedingly difficult and not typically employed \cite[\S13.4.1]{toro}.
+
+Generalizing the above to three dimensions is straight forward. We still solve one-dimensional,
+piece-wise constant Riemann Problems at the cell boundaries (now there are six instead of two), but
+for the time evolution in \cref{eq:half-time-step-1d} we incorporate the fluxes from all six faces.
+We now have a different slope vector (see \cref{sec:slope}) in each dimension and we'll denote the
+component in dimension $i$ by $\vc \Delta_\alpha^i$. We have six boundary extrapolated values,
+namely
+\begin{align}
+  \label{eq:boundary-values-3d}
+  \vc U_\alpha^{L,i} = \bar{\vc U}_\alpha - \frac{\vc \Delta_\alpha^i}{2}
+  \qquad \text{and} \qquad
+  \vc U_\alpha^{U,i} = \bar{\vc U}_\alpha + \frac{\vc \Delta_\alpha^i}{2},
+\end{align}
+which are evolved forward in time by $\Delta t/2$ to yield
+\begin{align}
+  \label{eq:evolved-boundary-values-3d}
+  \hat{\vc U}_\alpha^{[L|U],i} = \vc U_\alpha^{[L|U],i} + \frac{\Delta t}{2\Delta x^j}
+      \left[\vc F^j(\vc U_\alpha^{L,j}) - \vc F^j(\vc U_\alpha^{U,j})\right].
+\end{align}
+Now we solve the Riemann Problem at all six faces using one evolved boundary extrapolated value from
+this cell and one from the adjacent cell, just like in \cref{eq:RPs-1d}. This yields a similarity
+solution at each face, which we plug into the flux function $\vc F$ to get the approximate flux
+$\bar{\vc F}^i_{\alpha,[L|U]}$
+through that face. The cell averaged conserved quantity $\bar{\vc U}_\alpha$ is then updated
+according to \cref{eq:finite-volume}.
+
+
+\subsection{Slope construction and limiter methods}\label{sec:slope}
+
+\newcommand{\du}{\vc\Delta_\alpha^\text{up}}
+\newcommand{\dd}{\vc\Delta_\alpha^\text{down}}
+\newcommand{\dc}{\vc\Delta_\alpha^\text{cent}}
+\newcommand{\db}{\bar{\vc\Delta}_\alpha}
+
+We will restrict ourselves again to one dimension in this section, since it drastically simplifies
+notation. The components of the slope vector in the different dimensions are all determined
+independently from each other, so generalizing this discussion to multiple dimension is trivial.
+We use $\alpha+1$ to denote the neighboring cell in the positive direction and $\alpha-1$ the
+neighbor in the negative direction. We follow \cite[\S6]{leveque}. A general form of the slope is
+\begin{align}
+  \label{eq:slope_vector}
+  \vc \Delta_\alpha =
+      \frac{1}{2}(1+\omega) \left(\bar{\vc U}_{\alpha} - \bar{\vc U}_{\alpha-1}\right)
+    + \frac{1}{2}(1-\omega) \left(\bar{\vc U}_{\alpha+1} - \bar{\vc U}_{\alpha}\right),
+\end{align}
+where $\omega$ is a free parameter in the interval $[-1,1]$. Three common choices for $\omega$ are
+\begin{align}
+  \label{eq:example_slopes}
+  \text{Upwind ($\omega = 1$):} \quad
+    & \du = \bar{\vc U}_{\alpha} - \bar{\vc U}_{\alpha-1} &
+    & \text{(Beam--Warming).}  \\
+  \text{Centered ($\omega = 0$):} \quad
+    & \dc = \frac{\bar{\vc U}_{\alpha+1} - \bar{\vc U}_{\alpha-1}}{2} &
+    & \text{(Fromm),}  \\
+  \text{Downwind ($\omega = -1$):} \quad
+    & \dd = \bar{\vc U}_{\alpha+1} - \bar{\vc U}_{\alpha} &
+    & \text{(Lax--Wendroff),}
+\end{align}
+
+Using any of these slopes leads to a second-order method. Unfortunately, with the increased accuracy
+also come spurious oscillations near discontinuities. To avoid these discontinuities, the slope
+computed above needs to be limited in a way that ensures that the total variation of the solution
+does not increase. The resulting scheme is said to be total variation diminishing (TVD). Let
+$\db$ denote the limited slope and define the minmod and maxmod functions as
+\begin{align}
+  \label{eq:minmod-maxmod}
+  \text{minmod}(a,b) = \left\{
+    \begin{array}{ll}
+      0 & \text{if } ab \leq 0, \\
+      a & \text{if } |a| \leq |b| \text{ and } ab > 0, \\
+      b & \text{if } |b| \leq |a| \text{ and } ab > 0.
+    \end{array}\right. \\[6pt]
+    \text{maxmod}(a,b) = \left\{
+    \begin{array}{ll}
+      0 & \text{if } ab \leq 0, \\
+      a & \text{if } |a| \geq |b| \text{ and } ab > 0, \\
+      b & \text{if } |b| \geq |a| \text{ and } ab > 0.
+    \end{array}\right.
+\end{align}
+
+Some popular limiters are the following.
+\begin{align}
+  \label{eq:slope-limiters}
+  \text{minbee:}   \quad & \db = \text{minmod}\left(\du, \dd\right) \\[6pt]
+  \text{superbee:} \quad & \db = \text{maxmod}\big[\text{minmod}\left(\du, 2\dd\right), \nonumber \\
+      & \hphantom{\db = \text{maxmod}\big[} \text{minmod}\left(2\du,\dd\right)\big] \\[6pt]
+  \text{MC:} \quad       & \db = \left\{ \begin{array}{ll}
+    \phantom{-}0 & \text{if } \du\dd \leq 0, \\
+    \phantom{-}\text{min}(2|\du|, 2|\dd|, |\dc|) & \text{if } \dc > 0, \\
+    -\text{min}(2|\du|, 2|\dd|, |\dc|) & \text{if } \dc < 0.
+  \end{array} \right. \\[6pt]
+  \text{van Leer:} \quad & \db = \left\{ \begin{array}{ll}
+    0 & \text{if } \du\dd \leq 0, \\
+    \dfrac{2\du\dd}{\du+\dd} & \text{otherwise.}
+  \end{array} \right.
+\end{align}
+Note that the minbee limiter is also called minmod limiter.
+
+\section{$\gamma$-Law Equation of State}
+
+Let $\gamma$ be the adiabatic index (ratio constant-pressure heat capacity to constant-volume heat
+capacity). The pressure is given by
+\begin{align}
+  \label{eq:gamma-Law}
+  P = (\gamma-1)\rho e,
+\end{align}
+where $\rho$ is the mass density and $e$ is the specific internal energy. We have $\gamma = 5/3$ for
+monoatomic ideal gases and $\gamma = 7/5$ for diatomic ideal gases. From the ideal gas law we
+also have
+\begin{align}
+  \label{eq:ideal-gas}
+  PV = Nk_BT \Rightarrow P = \frac{N}{V}k_BT = nk_BT = \frac{\rho}{m}k_BT,
+\end{align}
+where $V$ is the volume, $N$ is the number of particles, $n = N/V$ is the number density, and $m$ is
+the mass of a particle. Equating the above gives
+\begin{align}
+  \label{eq:gamma-law_e}
+  e = \frac{1}{\gamma-1}\frac{k_BT}{m}.
+\end{align}
+For an isentropic (constant entropy, i.e.\ adiabatic and reversible) process, one can derive
+\begin{align}
+  \label{eq:isentropic}
+  P = \alpha \rho^\gamma,
+\end{align}
+for some constant $\gamma$. The sound speed can now be computed as
+\begin{align}
+  \label{eq:sound-speed}
+  c_s^2 = \left.\frac{dP}{d\rho}\right|_S = \gamma \alpha \rho^{\gamma-1} = \gamma\frac{P}{\rho} =
+  \gamma(\gamma-1)e.
+\end{align}
+
+\section*{Acknowledgements}
+
+The development of Ethon was funded by the Laboratory Directed
+Research and Development program of Los Alamos National Laboratory under
+project number 20190519ECR. The development used LANL Institutional Computing
+Program resources. LANL is operated by Triad National Security, LLC, for the
+National Nuclear Security Administration of the U.S.DOE (Contract No.\
+89233218CNA000001).
+
+\bibliographystyle{apj}
+\bibliography{notes.bib}
+
+\end{document}

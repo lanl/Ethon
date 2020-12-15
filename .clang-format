@@ -1,0 +1,11 @@
+ColumnLimit: 100
+IndentWidth: 2
+
+AllowAllParametersOfDeclarationOnNextLine: true
+AllowShortIfStatementsOnASingleLine: true
+AlwaysBreakTemplateDeclarations: true
+AlignAfterOpenBracket: DontAlign
+BinPackArguments: false
+BinPackParameters: false
+ConstructorInitializerAllOnOneLineOrOnePerLine: true
+IndentCaseLabels: true
