@@ -11,7 +11,7 @@ Building Ethon requires the following.
 
 - A C++14-capable compiler (test with `g++` 10)
 - `CMake` (https://cmake.org/)
-- `CUDA` (optional, https://developer.nvidia.com/cuda-toolkit)
+- `CUDA` (https://developer.nvidia.com/cuda-toolkit)
 - `googletest` (https://github.com/google/googletest)
 - `HDF5` (https://www.hdfgroup.org/solutions/hdf5/)
 - `OpenMP`
@@ -26,13 +26,10 @@ git clone git@github.com:lanl/Ethon.git
 cd Ethon
 mkdir build
 cd build
-
-# to compile without CUDA:
-cmake -DKokkos_ENABLE_OPENMP=ON ..
-# to compile with CUDA:
-CXX=../3rd_party/kokkos/bin/nvcc_wrapper cmake -DKokkos_ENABLE_CUDA=ON -DKokkos_ARCH_VOLTA70=ON \
+CXX=../3rd_party/kokkos/bin/nvcc_wrapper cmake \
+  -DKokkos_ENABLE_CUDA=ON     \
+  -DKokkos_ARCH_VOLTA70=ON    \
   -DKokkos_ENABLE_OPENMP=ON ..
-
 make -j
 make test
 ```
